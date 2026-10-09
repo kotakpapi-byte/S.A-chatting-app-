@@ -1,0 +1,147 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents an office user profile in S.A Chatting",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Unique Google user ID"
+        },
+        "username": {
+          "type": "string",
+          "description": "Corporate username handle"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User corporate email ending in @sudais.com"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Full display name"
+        },
+        "avatarUrl": {
+          "type": "string",
+          "description": "Profile picture URL or path"
+        },
+        "statusText": {
+          "type": "string",
+          "description": "Presence status message"
+        },
+        "isOnline": {
+          "type": "boolean",
+          "description": "Online presence toggle"
+        },
+        "department": {
+          "type": "string",
+          "description": "Office department name"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation"
+        }
+      },
+      "required": ["userId", "username", "email", "displayName", "createdAt"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "Represents a direct or group conversation",
+      "type": "object",
+      "properties": {
+        "chatId": {
+          "type": "string",
+          "description": "Unique chat ID"
+        },
+        "isGroup": {
+          "type": "boolean",
+          "description": "Whether chat is a group"
+        },
+        "title": {
+          "type": "string",
+          "description": "Chat title"
+        },
+        "creatorId": {
+          "type": "string",
+          "description": "Creator user ID"
+        },
+        "members": {
+          "type": "array",
+          "description": "List of user IDs in this chat"
+        },
+        "lastMessageText": {
+          "type": "string",
+          "description": "Last sent message preview"
+        },
+        "lastMessageTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last message"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when chat was created"
+        }
+      },
+      "required": ["chatId", "isGroup", "title", "creatorId", "members", "createdAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A single message inside a chat",
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "description": "Message unique identifier"
+        },
+        "chatId": {
+          "type": "string",
+          "description": "Parent chat identifier"
+        },
+        "senderId": {
+          "type": "string",
+          "description": "User ID of the sender"
+        },
+        "senderUsername": {
+          "type": "string",
+          "description": "Username of the sender"
+        },
+        "text": {
+          "type": "string",
+          "description": "Message content"
+        },
+        "imageUri": {
+          "type": "string",
+          "description": "Optional attached image URI"
+        },
+        "reaction": {
+          "type": "string",
+          "description": "Optional emoji reaction"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of message"
+        }
+      },
+      "required": ["messageId", "chatId", "senderId", "senderUsername", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User accounts and profile directory"
+    },
+    "/chats/{chatId}": {
+      "schema": "Chat",
+      "description": "Office chats and group metadata"
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messages posted in a chat"
+    }
+  }
+}

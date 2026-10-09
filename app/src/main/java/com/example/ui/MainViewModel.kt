@@ -1,9 +1,11 @@
 package com.example.ui
 
+import android.app.Activity
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.db.AppDatabase
+import com.example.data.firebase.FirestoreManager
 import com.example.data.model.AppSettingsEntity
 import com.example.data.model.ChatEntity
 import com.example.data.model.ChatMemberEntity
@@ -43,6 +45,7 @@ enum class AuthScreen {
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getInstance(application)
+    val firestoreManager = FirestoreManager(application)
     private val userDao = db.userDao()
     private val chatDao = db.chatDao()
     private val messageDao = db.messageDao()
@@ -270,7 +273,63 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun signInWithGoogleAccount(activity: Activity, onComplete: (Boolean, String?) -> Unit) {
+        firestoreManager.performGoogleSignIn(
+            activity = activity,
+            scope = viewModelScope,
+            onSuccess = { uid, email, name ->
+                viewModelScope.launch(Dispatchers.IO) {
+                    val cleanUser = email.substringBefore("@").lowercase().replace(".", "_").filter { it.isLetterOrDigit() || it == '_' }
+                    val corporateEmail = if (email.endsWith("@sudais.com")) email else "$cleanUser@sudais.com"
+                    var existingUser = userDao.getUserByUsername(cleanUser) ?: userDao.getUserByEmail(corporateEmail)
+                    if (existingUser == null) {
+                        val newUser = UserEntity(
+                            username = cleanUser,
+                            email = corporateEmail,
+                            passwordHash = "google_auth",
+                            displayName = name,
+                            statusText = "Available",
+                            isOnline = true,
+                            department = "Corporate Staff"
+                        )
+                        userDao.insertUser(newUser)
+                        existingUser = newUser
+                        val initialSettings = AppSettingsEntity(username = cleanUser)
+                        settingsDao.saveSettings(initialSettings)
+                        _appSettings.value = initialSettings
+                    } else {
+                        loadUserSettings(existingUser.username)
+                    }
+
+                    // Sync to Firestore
+                    firestoreManager.syncUserProfile(
+                        userId = uid,
+                        username = existingUser.username,
+                        email = existingUser.email,
+                        displayName = existingUser.displayName,
+                        avatarUrl = existingUser.avatarUri,
+                        department = existingUser.department,
+                        statusText = existingUser.statusText,
+                        isOnline = true
+                    )
+
+                    _currentUser.value = existingUser
+                    withContext(Dispatchers.Main) {
+                        onComplete(true, null)
+                    }
+                }
+            },
+            onError = { errorMsg ->
+                onComplete(false, errorMsg)
+            },
+            onCancelled = {
+                onComplete(false, null)
+            }
+        )
+    }
+
     fun logout() {
+        firestoreManager.signOut(viewModelScope) {}
         _currentUser.value = null
         _activeChat.value = null
         _currentScreen.value = AppScreen.CHATS
@@ -480,6 +539,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch(Dispatchers.IO) {
             messageDao.insertMessage(message)
+            firestoreManager.sendCloudMessage(
+                chatId = chat.chatId,
+                messageId = message.messageId,
+                senderId = firestoreManager.auth.currentUser?.uid ?: myUser.username,
+                senderUsername = myUser.username,
+                text = messageText,
+                imageUri = imageUri
+            )
             val previewText = if (imageUri != null && messageText.isBlank()) "📷 Photo" else messageText
             chatDao.updateLastMessage(chat.chatId, previewText, now, myUser.username)
 

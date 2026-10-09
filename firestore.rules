@@ -1,0 +1,110 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUser(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.username is string && data.username.size() >= 3 && data.username.size() <= 30 &&
+             data.email is string && data.email.size() <= 100 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 60 &&
+             (!('avatarUrl' in data) || data.avatarUrl == null || (data.avatarUrl is string && data.avatarUrl.size() <= 1000)) &&
+             (!('statusText' in data) || data.statusText == null || (data.statusText is string && data.statusText.size() <= 100)) &&
+             (!('isOnline' in data) || data.isOnline is bool) &&
+             (!('department' in data) || (data.department is string && data.department.size() <= 50));
+    }
+
+    function isValidChat(data) {
+      return data.chatId is string && data.chatId.size() <= 128 &&
+             data.isGroup is bool &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 100 &&
+             data.creatorId is string && data.creatorId.size() <= 128 &&
+             data.members is list && data.members.size() >= 1 && data.members.size() <= 100 &&
+             (!('lastMessageText' in data) || (data.lastMessageText is string && data.lastMessageText.size() <= 1000));
+    }
+
+    function isValidMessage(data) {
+      return data.messageId is string && data.messageId.size() <= 128 &&
+             data.chatId is string && data.chatId.size() <= 128 &&
+             data.senderId is string && data.senderId == request.auth.uid &&
+             data.senderUsername is string && data.senderUsername.size() <= 50 &&
+             (!('text' in data) || (data.text is string && data.text.size() <= 2000)) &&
+             (!('imageUri' in data) || data.imageUri == null || (data.imageUri is string && data.imageUri.size() <= 1000)) &&
+             (!('reaction' in data) || data.reaction == null || (data.reaction is string && data.reaction.size() <= 10));
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       isValidUser(incoming());
+      allow update: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUser(incoming());
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Chats Collection
+    match /chats/{chatId} {
+      allow get: if isSignedIn() && (request.auth.uid in resource.data.members || resource.data.isGroup == true);
+      allow list: if isSignedIn() && (resource.data.members.hasAny([request.auth.uid]) || resource.data.isGroup == true);
+      allow create: if isSignedIn() &&
+                       incoming().creatorId == request.auth.uid &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       isValidChat(incoming());
+      allow update: if isSignedIn() &&
+                       (request.auth.uid in resource.data.members || resource.data.isGroup == true) &&
+                       isValidChat(incoming());
+      allow delete: if isSignedIn() && resource.data.creatorId == request.auth.uid;
+
+      // Messages Subcollection
+      match /messages/{messageId} {
+        allow get: if isSignedIn() &&
+                      (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members ||
+                       get(/databases/$(database)/documents/chats/$(chatId)).data.isGroup == true);
+        allow list: if isSignedIn() &&
+                       (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members ||
+                        get(/databases/$(database)/documents/chats/$(chatId)).data.isGroup == true);
+        allow create: if isSignedIn() &&
+                         (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.members ||
+                          get(/databases/$(database)/documents/chats/$(chatId)).data.isGroup == true) &&
+                         incoming().senderId == request.auth.uid &&
+                         incoming().createdAt is timestamp &&
+                         incoming().createdAt <= request.time &&
+                         isValidMessage(incoming());
+        allow update: if isSignedIn() &&
+                         incoming().senderId == existing().senderId &&
+                         isValidMessage(incoming());
+        allow delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
+      }
+    }
+  }
+}
