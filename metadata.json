@@ -1,0 +1,8 @@
+{
+  "name": "S.A Chatting",
+  "description": "Secure enterprise office messaging app with @sudais.com accounts, username direct chatting, group chats, custom chat wallpapers, theme styling, and user status.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
